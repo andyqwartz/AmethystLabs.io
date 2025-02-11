@@ -12,6 +12,7 @@ const GenerationDashboard = () => {
   const [selectedImage, setSelectedImage] = useState<string>();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [prompt, setPrompt] = useState("");
   const [settings, setSettings] = useState({
     aspectRatio: "1:1",
     promptStrength: 0.8,
@@ -31,11 +32,14 @@ const GenerationDashboard = () => {
     setSettings((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleGenerate = async (type: "text" | "image") => {
+  const handleGenerate = async () => {
+    if (!prompt) return;
     setIsGenerating(true);
     // Add generation logic here
     setTimeout(() => setIsGenerating(false), 2000);
   };
+
+  const requiredCredits = selectedImage ? 2 : 1;
 
   return (
     <div className="min-h-screen bg-[#13111C] pt-20 px-4">
@@ -51,84 +55,46 @@ const GenerationDashboard = () => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          <Card className="bg-[#1A1625] border-purple-300/20">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-purple-400" />
-                Text to Image
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                placeholder="Describe the image you want to generate..."
-                className="bg-[#13111C] border-purple-300/20 text-white min-h-[120px]"
+        <Card className="bg-[#1A1625] border-purple-300/20">
+          <CardHeader>
+            <CardTitle className="text-xl text-white flex items-center gap-2">
+              {selectedImage ? (
+                <>
+                  <ImagePlus className="w-5 h-5 text-purple-400" />
+                  Image to Image
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-5 h-5 text-purple-400" />
+                  Text to Image
+                </>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex flex-col items-center gap-6">
+              <ImageUploadCard
+                onImageSelect={handleImageSelect}
+                selectedImage={selectedImage}
+                onRemove={() => setSelectedImage(undefined)}
               />
-              <div className="flex flex-col items-center gap-4">
-                <Button
-                  className="w-full max-w-md bg-purple-600 hover:bg-purple-700 text-white"
-                  disabled={!profile?.credits || isGenerating}
-                  onClick={() => handleGenerate("text")}
-                >
-                  {isGenerating ? "Generating..." : "Generate (1 Credit)"}
-                </Button>
-                {!isGenerating && (
-                  <Button
-                    variant="ghost"
-                    className="text-purple-400 hover:text-purple-300"
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                  >
-                    {showAdvanced ? (
-                      <>
-                        <ChevronUp className="w-4 h-4 mr-2" />
-                        Hide Advanced Settings
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4 mr-2" />
-                        Show Advanced Settings
-                      </>
-                    )}
-                  </Button>
-                )}
-                {showAdvanced && !isGenerating && (
-                  <div className="w-full max-w-md">
-                    <AdvancedSettings
-                      settings={settings}
-                      onChange={handleSettingChange}
-                    />
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-[#1A1625] border-purple-300/20">
-            <CardHeader>
-              <CardTitle className="text-xl text-white flex items-center gap-2">
-                <ImagePlus className="w-5 h-5 text-purple-400" />
-                Image to Image
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex flex-col items-center">
-                <ImageUploadCard
-                  onImageSelect={handleImageSelect}
-                  selectedImage={selectedImage}
-                  onRemove={() => setSelectedImage(undefined)}
-                />
+              <div className="w-full max-w-2xl">
                 <Textarea
-                  placeholder="Add additional prompt details (optional)..."
-                  className="bg-[#13111C] border-purple-300/20 text-white mt-4 w-full max-w-md"
+                  placeholder="Describe the image you want to generate..."
+                  className="bg-[#13111C] border-purple-300/20 text-white min-h-[120px]"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
                 />
               </div>
-              <div className="flex flex-col items-center gap-4">
+              <div className="w-full max-w-2xl flex flex-col items-center gap-4">
                 <Button
-                  className="w-full max-w-md bg-purple-600 hover:bg-purple-700 text-white"
-                  disabled={!profile?.credits || !selectedImage || isGenerating}
-                  onClick={() => handleGenerate("image")}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                  disabled={!profile?.credits || isGenerating || !prompt}
+                  onClick={handleGenerate}
                 >
-                  {isGenerating ? "Generating..." : "Generate (2 Credits)"}
+                  {isGenerating
+                    ? "Generating..."
+                    : `Generate (${requiredCredits} Credit${requiredCredits > 1 ? "s" : ""})`}
                 </Button>
                 {!isGenerating && (
                   <Button
@@ -139,18 +105,18 @@ const GenerationDashboard = () => {
                     {showAdvanced ? (
                       <>
                         <ChevronUp className="w-4 h-4 mr-2" />
-                        Hide Advanced Settings
+                        Hide Parameters
                       </>
                     ) : (
                       <>
                         <ChevronDown className="w-4 h-4 mr-2" />
-                        Show Advanced Settings
+                        Show Parameters
                       </>
                     )}
                   </Button>
                 )}
                 {showAdvanced && !isGenerating && (
-                  <div className="w-full max-w-md">
+                  <div className="w-full">
                     <AdvancedSettings
                       settings={settings}
                       onChange={handleSettingChange}
@@ -158,9 +124,9 @@ const GenerationDashboard = () => {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
