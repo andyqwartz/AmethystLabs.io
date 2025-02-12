@@ -1,10 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import Hero from "./landing/Hero";
 import FeatureGrid from "./landing/FeatureGrid";
 import CreditSection from "./landing/CreditSection";
 import { motion } from "framer-motion";
+import { Button } from "./ui/button";
+import { Shield } from "lucide-react";
+import AdminLoginModal from "./admin/AdminLoginModal";
 
 const Home = () => {
+  const [showAdminModal, setShowAdminModal] = useState(false);
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -43,7 +47,23 @@ const Home = () => {
             </div>
           </div>
         </section>
+        <div className="flex justify-center py-12">
+          <Button
+            variant="outline"
+            size="lg"
+            className="bg-[#13111C] border-purple-300/20 text-white hover:bg-purple-500/10 gap-2"
+            onClick={() => setShowAdminModal(true)}
+          >
+            <Shield className="w-5 h-5 text-purple-400" />
+            Admin Access
+          </Button>
+        </div>
       </main>
+
+      <AdminLoginModal
+        isOpen={showAdminModal}
+        onOpenChange={setShowAdminModal}
+      />
     </motion.div>
   );
 };

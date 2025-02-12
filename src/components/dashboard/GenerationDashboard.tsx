@@ -6,7 +6,7 @@ import { Wand2, Settings, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth";
 import ImageUploadCard from "./ImageUploadCard";
 import AdvancedSettings from "./AdvancedSettings";
-import { generateImage } from "@/lib/replicate";
+import { generateImage, replicate, initReplicate } from "@/lib/replicate";
 import { getPromptSuggestions, PromptSuggestion } from "@/lib/suggestions";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -66,6 +66,19 @@ const GenerationDashboard = () => {
   }, []);
 
   const handleGenerate = async () => {
+    // Re-initialize Replicate if needed
+    if (!replicate) {
+      const token = await initReplicate();
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Failed to initialize image generation service",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     if (!prompt) return;
 
     const requiredCredits = selectedImage ? 2 : 1;

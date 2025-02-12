@@ -83,9 +83,7 @@ const defaultPreferences = {
 };
 
 const createUserProfile = async (userId: string, email: string) => {
-  // Extract username from email (everything before @)
   const username = email.split("@")[0];
-
   const { error } = await supabase.from("profiles").insert({
     id: userId,
     email: email,
@@ -102,11 +100,9 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
-
   const { toast } = useToast();
 
   const fetchProfile = async (userId: string) => {
-    console.log("Fetching profile for user:", userId);
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -114,103 +110,38 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq("id", userId)
         .single();
 
-      if (error) {
-        console.error("Error fetching profile:", error);
-        return { error };
-      }
-
+      if (error) return { error };
       if (data) {
         setProfile(data as Profile);
         return { data };
       }
-
       return { error: new Error("Profile not found") };
     } catch (error) {
-      console.error("Error fetching profile:", error);
       return { error };
     }
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    const initAuth = async () => {
-      setLoading(true);
-      try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
-        if (error) throw error;
-
-        if (session?.user) {
-          setUser(session.user);
-          setIsEmailVerified(session.user.email_confirmed_at != null);
-          const { data: profileData } = await fetchProfile(session.user.id);
-          if (!profileData) {
-            const { error: createError } = await createUserProfile(
-              session.user.id,
-              session.user.email!,
-            );
-            if (!createError) {
-              await fetchProfile(session.user.id);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Auth initialization error:", error);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    initAuth();
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state change:", event, session?.user?.id);
-
       if (session?.user) {
         setUser(session.user);
         setIsEmailVerified(session.user.email_confirmed_at != null);
-
-        const { data: existingProfile } = await fetchProfile(session.user.id);
-
-        if (!existingProfile) {
-          const { error: createError } = await createUserProfile(
-            session.user.id,
-            session.user.email!,
-          );
-
-          if (createError) {
-            console.error("Error creating profile:", createError);
-            return;
-          }
-
+        const { data: profile } = await fetchProfile(session.user.id);
+        if (!profile) {
+          await createUserProfile(session.user.id, session.user.email!);
           await fetchProfile(session.user.id);
-        } else {
-          // Update last_login
-          await supabase
-            .from("profiles")
-            .update({ last_login: new Date().toISOString() })
-            .eq("id", session.user.id);
         }
       } else {
         setUser(null);
         setProfile(null);
         setIsEmailVerified(false);
       }
-
       setLoading(false);
     });
 
-    return () => {
-      subscription.unsubscribe();
-      mounted = false;
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -222,49 +153,13 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (error) throw error;
 
       if (data.session) {
-        setUser(data.session.user);
-        const { data: profileData } = await fetchProfile(data.session.user.id);
-
-        // Check if this is the first login
-        if (profileData && profileData.last_login === null) {
-          // Update last_login first
-          await supabase
-            .from("profiles")
-            .update({ last_login: new Date().toISOString() })
-            .eq("id", data.session.user.id);
-
-          // Show welcome toast and wait before redirect
-          toast({
-            title: "Welcome to AmethystLabs!",
-            description:
-              "Thank you for joining us. You've received 10 free credits to get started!",
-          });
-
-          // Wait longer for toast to be visible
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-        } else {
-          toast({
-            title: "Welcome back!",
-            description: "Successfully logged in",
-          });
-        }
-
-        // Return success and redirect path
+        const { data: profile } = await fetchProfile(data.session.user.id);
         let redirectPath = "/dashboard";
-        if (profileData?.role === "admin") {
-          redirectPath = "/admin";
-        } else if (profileData?.role === "moderator") {
-          redirectPath = "/mod";
-        }
+        if (profile?.role === "admin") redirectPath = "/admin";
+        else if (profile?.role === "moderator") redirectPath = "/mod";
 
-        return {
-          error: null,
-          success: true,
-          redirectPath,
-          profile: profileData,
-        };
+        return { error: null, success: true, redirectPath, profile };
       }
-
       return { error: new Error("No session created"), success: false };
     } catch (error) {
       return { error, success: false };
@@ -273,19 +168,13 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const loginWithSocial = async (provider: "github" | "google") => {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
         },
       });
-
-      if (error) throw error;
-      return { error: null, data };
+      return { error };
     } catch (error) {
       return { error };
     }
@@ -301,17 +190,6 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         },
       });
 
-      if (!error && data.user) {
-        const { error: profileError } = await createUserProfile(
-          data.user.id,
-          data.user.email!,
-        );
-
-        if (profileError) {
-          console.error("Error creating profile:", profileError);
-        }
-      }
-
       return {
         error,
         needsVerification: !error && !data.session,
@@ -323,14 +201,10 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setIsEmailVerified(false);
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user?.id) return { error: new Error("No user logged in") };
-
     try {
       const { error } = await supabase
         .from("profiles")
@@ -338,7 +212,6 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq("id", user.id);
 
       if (error) throw error;
-
       await fetchProfile(user.id);
       return { error: null };
     } catch (error) {
@@ -351,7 +224,6 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   ) => {
     if (!profile?.preferences)
       return { error: new Error("No preferences found") };
-
     return updateProfile({
       preferences: { ...profile.preferences, ...updates },
     });
@@ -363,7 +235,6 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     metadata: any = {},
   ) => {
     if (!user?.id) return { error: new Error("No user logged in") };
-
     try {
       const { error } = await supabase.rpc("handle_credit_transaction", {
         p_user_id: user.id,
@@ -371,9 +242,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         p_type: type,
         p_metadata: metadata,
       });
-
       if (error) throw error;
-
       await fetchProfile(user.id);
       return { error: null };
     } catch (error) {
@@ -390,7 +259,6 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (!profile?.credits || profile.credits < amount) {
       return { error: new Error("Insufficient credits") };
     }
-
     return addCredits(-amount, type, metadata);
   };
 

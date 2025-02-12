@@ -11,10 +11,12 @@ import { supabase } from "./lib/supabase";
 // Initialize Tempo and Replicate
 TempoDevtools.init();
 
-// Initialize Replicate only if needed
-if (!import.meta.env.VITE_TEMPO) {
-  initReplicate();
-}
+// Initialize Replicate
+initReplicate().then((token) => {
+  if (token) {
+    console.log("Replicate initialized with token");
+  }
+});
 
 // Set up Supabase auth persistence
 supabase.auth.onAuthStateChange((event, session) => {
