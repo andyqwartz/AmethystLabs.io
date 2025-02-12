@@ -233,11 +233,15 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             .update({ last_login: new Date().toISOString() })
             .eq("id", data.session.user.id);
 
+          // Show welcome toast and wait before redirect
           toast({
             title: "Welcome to AmethystLabs!",
             description:
               "Thank you for joining us. You've received 10 free credits to get started!",
           });
+
+          // Wait longer for toast to be visible
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         } else {
           toast({
             title: "Welcome back!",

@@ -116,11 +116,13 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
   };
 
   return (
-    <Card className={`bg-[#1A1625] border-purple-300/20 ${className}`}>
-      <CardContent className="p-6 space-y-6">
-        <div className="flex items-start gap-4">
+    <Card
+      className={`bg-[#1A1625] border-purple-300/20 ${className} overflow-hidden`}
+    >
+      <CardContent className="p-3 sm:p-4 md:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row items-start gap-4">
           <div className="relative">
-            <Avatar className="w-20 h-20 border-2 border-purple-500/20">
+            <Avatar className="w-16 h-16 sm:w-20 sm:h-20 border-2 border-purple-500/20">
               <AvatarImage src={profile?.avatar_url} />
               <AvatarFallback className="bg-purple-500/20 text-purple-200 text-xl">
                 {profile?.email?.[0]?.toUpperCase()}
@@ -145,7 +147,7 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
           <div className="flex-1 min-w-0">
             {isEditing ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="username" className="text-white">
                       Username
@@ -252,7 +254,7 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 max-w-full overflow-x-auto">
                   <Badge className={getRoleBadgeColor(profile?.role || "user")}>
                     <Shield className="w-4 h-4 mr-1" />
                     {profile?.role?.charAt(0).toUpperCase() +

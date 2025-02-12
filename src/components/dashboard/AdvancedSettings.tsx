@@ -55,7 +55,7 @@ const AdvancedSettings = ({ settings, onChange }: AdvancedSettingsProps) => {
   };
 
   return (
-    <div className="space-y-6 p-6 bg-[#1A1625] rounded-xl border border-purple-300/20">
+    <div className="space-y-6 p-3 sm:p-4 md:p-6 bg-[#1A1625] rounded-xl border border-purple-300/20 overflow-hidden">
       <div className="space-y-2">
         <Label className="text-white">Aspect Ratio</Label>
         <Select
@@ -209,18 +209,18 @@ const AdvancedSettings = ({ settings, onChange }: AdvancedSettingsProps) => {
         </div>
         {(settings.hfLoras || []).map((lora, index) => (
           <div key={index} className="space-y-2">
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 value={lora}
                 onChange={(e) => handleLoraChange(index, e.target.value)}
-                className="flex-1 bg-[#13111C] border border-purple-300/20 rounded-md px-3 py-2 text-white placeholder-white/40"
+                className="w-full sm:flex-1 bg-[#13111C] border border-purple-300/20 rounded-md px-3 py-2 text-white placeholder-white/40"
                 placeholder="LoRA URL or Huggingface path"
               />
               <Button
                 onClick={() => removeLora(index)}
                 variant="outline"
                 size="sm"
-                className="bg-[#13111C] border-purple-300/20 text-white hover:bg-purple-500/20"
+                className="w-full sm:w-auto bg-[#13111C] border-purple-300/20 text-white hover:bg-purple-500/20"
               >
                 Remove
               </Button>

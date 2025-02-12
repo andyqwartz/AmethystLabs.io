@@ -182,7 +182,7 @@ const GenerationDashboard = () => {
   const requiredCredits = selectedImage ? 2 : 1;
 
   return (
-    <div className="min-h-screen bg-[#13111C] pt-24 pb-16 px-4">
+    <div className="min-h-screen bg-[#13111C] pt-24 pb-16 px-2 sm:px-4">
       <div className="container mx-auto max-w-6xl">
         <Card className="bg-[#1A1625] border-purple-300/20">
           <CardContent className="pt-6 space-y-6">
@@ -194,13 +194,20 @@ const GenerationDashboard = () => {
               />
               <div className="w-full max-w-2xl relative">
                 <div className="relative">
-                  <Input
+                  <textarea
                     placeholder="Describe the image you want to generate..."
-                    className="bg-[#13111C] border-purple-300/20 text-white h-12 pl-4 pr-12 rounded-full"
+                    className="w-full bg-[#13111C] border border-purple-300/20 text-white px-4 py-3 rounded-full text-center resize-none overflow-hidden transition-all duration-200"
                     value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
+                    onChange={(e) => {
+                      setPrompt(e.target.value);
+                      e.target.style.height = "auto";
+                      e.target.style.height = e.target.scrollHeight + "px";
+                    }}
+                    style={{
+                      minHeight: "48px",
+                      maxHeight: "120px",
+                    }}
                   />
-                  <Wand2 className="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400/50" />
                 </div>
                 {suggestions.length > 0 && (
                   <div className="absolute w-full mt-2 bg-[#13111C] border border-purple-300/20 rounded-xl overflow-hidden z-10 shadow-xl">

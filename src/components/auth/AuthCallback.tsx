@@ -52,10 +52,14 @@ const AuthCallback = () => {
 
             if (createError) throw createError;
 
+            // Show welcome toast and wait before redirect
             toast({
               title: "Welcome to AmethystLabs!",
-              description: "You've received 10 free credits to get started.",
+              description: "You've received 10 free credits to get started!",
             });
+
+            // Wait for toast to be visible
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           } else {
             // Update last login for existing profile
             await supabase
@@ -63,10 +67,7 @@ const AuthCallback = () => {
               .update({ last_login: new Date().toISOString() })
               .eq("id", session.user.id);
 
-            toast({
-              title: "Welcome back!",
-              description: "Successfully logged in",
-            });
+            // Don't show welcome back toast here, it will be handled in auth context
           }
 
           // Redirect based on role

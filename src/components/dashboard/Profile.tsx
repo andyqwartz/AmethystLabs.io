@@ -169,13 +169,13 @@ const Profile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#13111C] pt-20 px-4">
-      <div className="container mx-auto max-w-6xl">
-        <div className="grid lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2">
+    <div className="min-h-screen bg-[#13111C] pt-24 px-0 sm:px-4 pb-safe">
+      <div className="container mx-auto max-w-6xl space-y-4 sm:space-y-6 overflow-x-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="col-span-1 lg:col-span-2">
             <ProfileHeader />
           </div>
-          <div className="space-y-6">
+          <div className="col-span-1 space-y-6">
             <Link
               to="/credits"
               className="block w-full p-6 bg-[#1A1625] border border-purple-300/20 rounded-lg hover:bg-[#1F1A29] transition-colors"

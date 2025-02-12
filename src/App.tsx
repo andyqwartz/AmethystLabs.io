@@ -69,7 +69,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#2D2438] via-[#1F1A29] to-[#13111C]">
+    <div className="min-h-screen bg-gradient-to-b from-[#2D2438] via-[#1F1A29] to-[#13111C] overflow-x-hidden pt-safe pb-safe pl-safe pr-safe">
       <Navbar />
       <Routes>
         {/* Auth callback must be first */}
