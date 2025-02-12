@@ -96,6 +96,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     console.log("Initializing auth...");
+    let mounted = true;
+
     const initAuth = async () => {
       try {
         const {
@@ -127,7 +129,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       } catch (error) {
         console.error("Auth initialization error:", error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -141,21 +145,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (session?.user) {
         setUser(session.user);
         setIsEmailVerified(session.user.email_confirmed_at != null);
-        const { data: profileData } = await fetchProfile(session.user.id);
-        if (!profileData) {
-          // If no profile exists, create one
-          const { error: createError } = await supabase
+
+        // Wait a moment to ensure profile is created
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const { data: profileData, error: profileError } = await fetchProfile(
+          session.user.id,
+        );
+
+        if (profileError) {
+          console.error("Error fetching profile:", profileError);
+          return;
+        }
+
+        if (profileData) {
+          setProfile(profileData);
+          // Update last_login
+          await supabase
             .from("profiles")
-            .insert({
-              id: session.user.id,
-              email: session.user.email,
-              role: "user",
-              credits: 10,
-              preferences: {},
-            });
-          if (!createError) {
-            await fetchProfile(session.user.id);
+            .update({ last_login: new Date().toISOString() })
+            .eq("id", session.user.id);
+
+          // Handle redirection based on role
+          let redirectPath = "/dashboard";
+          if (profileData.role === "admin") {
+            redirectPath = "/admin";
+          } else if (profileData.role === "moderator") {
+            redirectPath = "/mod";
           }
+          window.location.href = redirectPath;
         }
       } else {
         setUser(null);
@@ -234,6 +252,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           queryParams: {
             access_type: "offline",
             prompt: "consent",
+          },
+          data: {
+            initial_credits: 10,
           },
         },
       });

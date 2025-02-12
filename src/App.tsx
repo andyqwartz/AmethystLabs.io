@@ -82,34 +82,64 @@ function App() {
 
             if (!existingProfile) {
               // Create new profile for social login
-              await supabase.from("profiles").insert({
-                id: session.user.id,
-                email: session.user.email,
-                role: "user",
-                credits: 10,
-                preferences: {},
+              const { error: insertError } = await supabase
+                .from("profiles")
+                .insert({
+                  id: session.user.id,
+                  email: session.user.email,
+                  role: "user",
+                  credits: 10,
+                  preferences: {},
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  last_login: new Date().toISOString(),
+                });
+
+              if (insertError) throw insertError;
+
+              // Fetch the newly created profile
+              const { data: newProfile, error: fetchError } = await supabase
+                .from("profiles")
+                .select("*")
+                .eq("id", session.user.id)
+                .single();
+
+              if (fetchError) throw fetchError;
+
+              let redirectPath = "/dashboard";
+              if (newProfile?.role === "admin") {
+                redirectPath = "/admin";
+              } else if (newProfile?.role === "moderator") {
+                redirectPath = "/mod";
+              }
+
+              toast({
+                title: "Welcome to AmethystLabs!",
+                description: `You've received 10 free credits to get started.`,
               });
+
+              navigate(redirectPath, { replace: true });
+              return;
             }
 
-            // Get user role from profile
-            const { data: profile } = await supabase
+            // Update last_login for existing profile
+            const { error: updateError } = await supabase
               .from("profiles")
-              .select("role")
-              .eq("id", session.user.id)
-              .single();
+              .update({ last_login: new Date().toISOString() })
+              .eq("id", session.user.id);
+
+            if (updateError) throw updateError;
 
             let redirectPath = "/dashboard";
-            if (profile?.role === "admin") {
+            if (existingProfile.role === "admin") {
               redirectPath = "/admin";
-            } else if (profile?.role === "moderator") {
+            } else if (existingProfile.role === "moderator") {
               redirectPath = "/mod";
             }
 
             toast({
-              title: "Success",
-              description: existingProfile
-                ? `Welcome back! Successfully logged in with ${provider || "social provider"}`
-                : `Welcome to AmethystLabs! You've received 10 free credits to get started.`,
+              title: "Welcome back!",
+              description: `Successfully logged in with ${provider || "social provider"}`,
             });
 
             navigate(redirectPath, { replace: true });

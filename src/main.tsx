@@ -27,24 +27,33 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// Check for existing tokens and restore session
-const accessToken = localStorage.getItem("sb-access-token");
-const refreshToken = localStorage.getItem("sb-refresh-token");
-if (accessToken && refreshToken) {
-  supabase.auth.setSession({
-    access_token: accessToken,
-    refresh_token: refreshToken,
-  });
-}
+const initApp = async () => {
+  // Check for existing tokens and restore session
+  const accessToken = localStorage.getItem("sb-access-token");
+  const refreshToken = localStorage.getItem("sb-refresh-token");
 
-const basename = import.meta.env.BASE_URL;
+  if (accessToken && refreshToken) {
+    try {
+      await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+    } catch (error) {
+      console.error("Failed to restore session:", error);
+      localStorage.removeItem("sb-access-token");
+      localStorage.removeItem("sb-refresh-token");
+    }
+  }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  const basename = import.meta.env.BASE_URL;
+
+  ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrowserRouter basename={basename}>
       <AuthProvider>
         <App />
       </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>,
-);
+    </BrowserRouter>,
+  );
+};
+
+initApp();

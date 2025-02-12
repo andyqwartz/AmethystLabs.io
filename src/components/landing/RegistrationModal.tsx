@@ -54,11 +54,11 @@ const RegistrationModal = ({
           variant: "destructive",
         });
       } else if (success && profile) {
+        toast({
+          title: "Login successful",
+          description: "Redirecting to dashboard...",
+        });
         onOpenChange?.(false);
-        // Check if there was a previous attempted location
-        const from =
-          location.state?.from?.pathname || redirectPath || "/dashboard";
-        navigate(from, { replace: true });
       }
     } catch (error) {
       setError("An unexpected error occurred");

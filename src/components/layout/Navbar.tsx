@@ -1,11 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth";
+import { useToast } from "@/components/ui/use-toast";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, User, LogOut } from "lucide-react";
 import RegistrationModal from "../landing/RegistrationModal";
 
 export default function Navbar() {
+  const { toast } = useToast();
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [showRegModal, setShowRegModal] = useState(false);
