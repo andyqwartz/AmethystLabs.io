@@ -15,6 +15,9 @@ const ImageUploadCard = ({
   onRemove,
 }: ImageUploadCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number }>(
+    { width: 0, height: 0 },
+  );
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -31,8 +34,16 @@ const ImageUploadCard = ({
     }
   };
 
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.target as HTMLImageElement;
+    setImageSize({
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+    });
+  };
+
   return (
-    <div className="relative w-full max-w-md mx-auto">
+    <div className="relative w-full max-w-4xl mx-auto">
       <input
         type="file"
         accept="image/*"
@@ -51,9 +62,11 @@ const ImageUploadCard = ({
         <Card
           className={cn(
             "relative overflow-hidden rounded-2xl transition-all duration-300",
-            "aspect-square w-full max-w-md mx-auto",
             !selectedImage &&
               "border-2 border-dashed border-purple-300/20 bg-[#13111C]",
+            selectedImage
+              ? "inline-block"
+              : "w-full aspect-square max-w-md mx-auto",
           )}
         >
           {selectedImage ? (
@@ -61,16 +74,17 @@ const ImageUploadCard = ({
               <img
                 src={selectedImage}
                 alt="Selected"
-                className="w-full h-full object-cover rounded-2xl"
+                className="max-w-full h-auto object-contain rounded-2xl"
+                onLoad={handleImageLoad}
               />
-              {(isHovered || onRemove) && (
+              {isHovered && onRemove && (
                 <button
                   onClick={(e) => {
                     e.preventDefault();
                     onRemove?.();
                   }}
-                  className="absolute top-2 right-2 p-2 rounded-full bg-purple-600 text-white
-                           hover:bg-purple-700 transition-colors duration-200"
+                  className="absolute top-2 right-2 p-2 rounded-full bg-purple-600/80 text-white
+                           hover:bg-purple-700 transition-colors duration-200 opacity-0 hover:opacity-100"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -86,6 +100,11 @@ const ImageUploadCard = ({
           )}
         </Card>
       </label>
+      {selectedImage && imageSize.width > 0 && (
+        <p className="mt-2 text-sm text-purple-200/60 text-center">
+          {imageSize.width} × {imageSize.height}px
+        </p>
+      )}
     </div>
   );
 };
