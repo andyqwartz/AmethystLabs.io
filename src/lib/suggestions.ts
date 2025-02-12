@@ -12,11 +12,9 @@ export const getPromptSuggestions = async (
   if (!input || input.length < 3) return [];
 
   // Get suggestions from supabase based on input
-  const { data: suggestions, error } = await supabase
-    .from("prompts")
-    .select("id, prompt, score")
-    .textSearch("prompt", input)
-    .limit(5);
+  const { data: suggestions, error } = await supabase.rpc("search_prompts", {
+    search_term: input,
+  });
 
   if (error) {
     console.error("Error fetching suggestions:", error);

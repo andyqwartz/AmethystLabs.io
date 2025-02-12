@@ -21,7 +21,7 @@ const RegistrationModal = ({
   onOpenChange,
   defaultMode = "login",
 }: RegistrationModalProps) => {
-  const { register, login, loginWithSocial } = useAuth();
+  const { register, login, loginWithSocial, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +42,7 @@ const RegistrationModal = ({
 
   const handleLogin = async (data: { email: string; password: string }) => {
     try {
-      const { error, success, redirectPath, profile } = await login(
+      const { error, success, redirectPath } = await login(
         data.email,
         data.password,
       );
@@ -53,12 +53,13 @@ const RegistrationModal = ({
           description: error.message,
           variant: "destructive",
         });
-      } else if (success && profile) {
+      } else if (success) {
         toast({
           title: "Login successful",
           description: "Redirecting to dashboard...",
         });
         onOpenChange?.(false);
+        navigate(redirectPath || "/dashboard", { replace: true });
       }
     } catch (error) {
       setError("An unexpected error occurred");
@@ -155,6 +156,7 @@ const RegistrationModal = ({
       <DialogContent
         className="sm:max-w-[480px] bg-gray-900/95 backdrop-blur-lg border-purple-300/20 rounded-xl overflow-hidden max-h-[90vh] overflow-y-auto"
         onPointerDownOutside={(e) => e.preventDefault()}
+        description="Authentication dialog for login and registration"
       >
         <AnimatePresence mode="wait">
           <motion.div

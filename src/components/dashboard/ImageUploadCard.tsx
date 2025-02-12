@@ -43,7 +43,7 @@ const ImageUploadCard = ({
   };
 
   return (
-    <div className="relative w-full max-w-4xl mx-auto">
+    <div className="w-full max-w-2xl mx-auto">
       <input
         type="file"
         accept="image/*"
@@ -61,12 +61,12 @@ const ImageUploadCard = ({
       >
         <Card
           className={cn(
-            "relative overflow-hidden rounded-2xl transition-all duration-300",
+            "relative overflow-hidden transition-all duration-300",
             !selectedImage &&
-              "border-2 border-dashed border-purple-300/20 bg-[#13111C]",
+              "border border-dashed border-purple-300/20 bg-[#13111C]",
             selectedImage
               ? "inline-block"
-              : "w-full aspect-square max-w-md mx-auto",
+              : "w-full aspect-square max-w-2xl mx-auto",
           )}
         >
           {selectedImage ? (
@@ -74,7 +74,7 @@ const ImageUploadCard = ({
               <img
                 src={selectedImage}
                 alt="Selected"
-                className="max-w-full h-auto object-contain rounded-2xl"
+                className="max-w-full h-auto object-contain"
                 onLoad={handleImageLoad}
               />
               {isHovered && onRemove && (
@@ -91,10 +91,10 @@ const ImageUploadCard = ({
               )}
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full p-8 bg-[#13111C]">
-              <ImagePlus className="w-8 h-8 mb-2 text-purple-400" />
-              <p className="text-purple-200/60 text-center">
-                Drop an image or click to upload
+            <div className="flex flex-col items-center justify-center h-full p-8">
+              <ImagePlus className="w-12 h-12 text-purple-400/50 mb-4" />
+              <p className="text-purple-300/40 text-center text-lg">
+                Déposez une image ou cliquez pour télécharger
               </p>
             </div>
           )}

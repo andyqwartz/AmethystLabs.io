@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
-import { Wand2, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Input } from "../ui/input";
+import { Wand2, Settings, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/auth";
 import ImageUploadCard from "./ImageUploadCard";
 import AdvancedSettings from "./AdvancedSettings";
 import { generateImage } from "@/lib/replicate";
 import { getPromptSuggestions, PromptSuggestion } from "@/lib/suggestions";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/components/ui/use-toast";
 
 const GenerationDashboard = () => {
+  const { toast } = useToast();
   const { profile } = useAuth();
   const [selectedImage, setSelectedImage] = useState<string>();
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -179,16 +182,10 @@ const GenerationDashboard = () => {
   const requiredCredits = selectedImage ? 2 : 1;
 
   return (
-    <div className="min-h-screen bg-[#13111C] pt-20 px-4">
+    <div className="min-h-screen bg-[#13111C] pt-24 pb-16 px-4">
       <div className="container mx-auto max-w-6xl">
         <Card className="bg-[#1A1625] border-purple-300/20">
-          <CardHeader>
-            <CardTitle className="text-xl text-white flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-purple-400" />
-              Generate Image
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="pt-6 space-y-6">
             <div className="flex flex-col items-center gap-6">
               <ImageUploadCard
                 onImageSelect={handleImageSelect}
@@ -196,21 +193,30 @@ const GenerationDashboard = () => {
                 onRemove={() => setSelectedImage(undefined)}
               />
               <div className="w-full max-w-2xl relative">
-                <Textarea
-                  placeholder="Describe the image you want to generate..."
-                  className="bg-[#13111C] border-purple-300/20 text-white min-h-[120px]"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    placeholder="Describe the image you want to generate..."
+                    className="bg-[#13111C] border-purple-300/20 text-white h-12 pl-4 pr-12 rounded-full"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                  />
+                  <Wand2 className="absolute right-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-purple-400/50" />
+                </div>
                 {suggestions.length > 0 && (
-                  <div className="absolute w-full mt-1 bg-[#13111C] border border-purple-300/20 rounded-md overflow-hidden z-10">
+                  <div className="absolute w-full mt-2 bg-[#13111C] border border-purple-300/20 rounded-xl overflow-hidden z-10 shadow-xl">
                     {suggestions.map((suggestion) => (
                       <button
                         key={suggestion.id}
-                        className="w-full px-4 py-2 text-left text-white hover:bg-purple-500/20 transition-colors"
+                        className="w-full px-4 py-3 text-left text-white hover:bg-purple-500/20 transition-colors flex items-center gap-3"
                         onClick={() => handleSuggestionClick(suggestion)}
                       >
-                        {suggestion.prompt}
+                        <div className="p-1.5 rounded-full bg-purple-500/10">
+                          <Wand2 className="w-4 h-4 text-purple-400" />
+                        </div>
+                        <span className="flex-1">{suggestion.prompt}</span>
+                        <span className="text-sm text-purple-400/60">
+                          {suggestion.score} uses
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -219,39 +225,50 @@ const GenerationDashboard = () => {
               <div className="w-full max-w-2xl flex flex-col items-center gap-4">
                 <Button
                   className={cn(
-                    "w-full bg-purple-600 hover:bg-purple-700 text-white",
-                    isGenerating && "opacity-80 cursor-not-allowed",
+                    "w-full max-w-md mx-auto h-12 bg-purple-600 hover:bg-purple-700 text-white rounded-full relative overflow-hidden transition-all duration-300",
+                    isGenerating && "pl-4 pr-4",
                   )}
                   disabled={!profile?.credits || isGenerating || !prompt}
                   onClick={handleGenerate}
                 >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    `Generate (${requiredCredits} Credit${requiredCredits > 1 ? "s" : ""})`
-                  )}
+                  <div
+                    className={cn(
+                      "absolute inset-0 flex items-center justify-center transition-opacity duration-300",
+                      isGenerating ? "opacity-100" : "opacity-0",
+                    )}
+                  >
+                    <div className="absolute inset-0 bg-purple-500/20 backdrop-blur-sm" />
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-100" />
+                  </div>
+                  <span
+                    className={cn(
+                      "flex items-center justify-center gap-2 transition-opacity duration-300",
+                      isGenerating ? "opacity-0" : "opacity-100",
+                    )}
+                  >
+                    <Wand2 className="w-5 h-5" />
+                    Generate
+                  </span>
                 </Button>
                 {!isGenerating && (
-                  <Button
-                    variant="ghost"
-                    className="text-purple-400 hover:text-purple-300"
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                  >
-                    {showAdvanced ? (
-                      <>
-                        <ChevronUp className="w-4 h-4 mr-2" />
-                        Hide Parameters
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="w-4 h-4 mr-2" />
-                        Show Parameters
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex justify-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "w-10 h-10 rounded-full bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:text-purple-300 transition-all duration-300",
+                        showAdvanced && "bg-purple-500/20",
+                      )}
+                      onClick={() => setShowAdvanced(!showAdvanced)}
+                    >
+                      <Settings
+                        className={cn(
+                          "w-5 h-5 transition-transform duration-300",
+                          showAdvanced && "rotate-90",
+                        )}
+                      />
+                    </Button>
+                  </div>
                 )}
                 {showAdvanced && !isGenerating && (
                   <div className="w-full">

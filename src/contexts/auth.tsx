@@ -30,7 +30,15 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ error: any | null }>;
+  login: (
+    email: string,
+    password: string,
+  ) => Promise<{
+    error: any | null;
+    success?: boolean;
+    redirectPath?: string;
+    profile?: Profile | null;
+  }>;
   loginWithSocial: (
     provider: "github" | "google",
   ) => Promise<{ error: any | null }>;
@@ -58,9 +66,38 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const defaultPreferences = {
+  theme: "dark",
+  emailNotifications: true,
+  autoSave: true,
+  showParameters: true,
+  language: "en",
+  imageQualityPreference: "high",
+  defaultAspectRatio: "1:1",
+  defaultPromptStrength: 0.8,
+  defaultNumOutputs: 1,
+  defaultNumInferenceSteps: 28,
+  defaultGuidanceScale: 3.5,
+  defaultOutputFormat: "webp",
+  defaultOutputQuality: 80,
+};
+
+const createUserProfile = async (userId: string, email: string) => {
+  // Extract username from email (everything before @)
+  const username = email.split("@")[0];
+
+  const { error } = await supabase.from("profiles").insert({
+    id: userId,
+    email: email,
+    username: username,
+    role: "user",
+    credits: 10,
+    preferences: defaultPreferences,
+  });
+  return { error };
+};
+
+const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,10 +132,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   useEffect(() => {
-    console.log("Initializing auth...");
     let mounted = true;
 
     const initAuth = async () => {
+      setLoading(true);
       try {
         const {
           data: { session },
@@ -111,16 +148,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           setIsEmailVerified(session.user.email_confirmed_at != null);
           const { data: profileData } = await fetchProfile(session.user.id);
           if (!profileData) {
-            // If no profile exists, create one
-            const { error: createError } = await supabase
-              .from("profiles")
-              .insert({
-                id: session.user.id,
-                email: session.user.email,
-                role: "user",
-                credits: 10,
-                preferences: {},
-              });
+            const { error: createError } = await createUserProfile(
+              session.user.id,
+              session.user.email!,
+            );
             if (!createError) {
               await fetchProfile(session.user.id);
             }
@@ -146,34 +177,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(session.user);
         setIsEmailVerified(session.user.email_confirmed_at != null);
 
-        // Wait a moment to ensure profile is created
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        const { data: existingProfile } = await fetchProfile(session.user.id);
 
-        const { data: profileData, error: profileError } = await fetchProfile(
-          session.user.id,
-        );
+        if (!existingProfile) {
+          const { error: createError } = await createUserProfile(
+            session.user.id,
+            session.user.email!,
+          );
 
-        if (profileError) {
-          console.error("Error fetching profile:", profileError);
-          return;
-        }
+          if (createError) {
+            console.error("Error creating profile:", createError);
+            return;
+          }
 
-        if (profileData) {
-          setProfile(profileData);
+          await fetchProfile(session.user.id);
+        } else {
           // Update last_login
           await supabase
             .from("profiles")
             .update({ last_login: new Date().toISOString() })
             .eq("id", session.user.id);
-
-          // Handle redirection based on role
-          let redirectPath = "/dashboard";
-          if (profileData.role === "admin") {
-            redirectPath = "/admin";
-          } else if (profileData.role === "moderator") {
-            redirectPath = "/mod";
-          }
-          window.location.href = redirectPath;
         }
       } else {
         setUser(null);
@@ -186,6 +209,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     return () => {
       subscription.unsubscribe();
+      mounted = false;
     };
   }, []);
 
@@ -253,14 +277,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             access_type: "offline",
             prompt: "consent",
           },
-          data: {
-            initial_credits: 10,
-          },
         },
       });
 
       if (error) throw error;
-      return { error: null };
+      return { error: null, data };
     } catch (error) {
       return { error };
     }
@@ -273,12 +294,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            email,
-            initial_credits: 10,
-          },
         },
       });
+
+      if (!error && data.user) {
+        const { error: profileError } = await createUserProfile(
+          data.user.id,
+          data.user.email!,
+        );
+
+        if (profileError) {
+          console.error("Error creating profile:", profileError);
+        }
+      }
 
       return {
         error,
@@ -384,10 +412,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-export const useAuth = () => {
+const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
+
+export { AuthProvider, useAuth };

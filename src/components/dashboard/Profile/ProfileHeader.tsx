@@ -27,17 +27,14 @@ interface ProfileHeaderProps {
 }
 
 const ProfileHeader = ({ className }: ProfileHeaderProps) => {
-  const { profile, updateProfile, logout } = useAuth();
+  const { profile, updateProfile } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     username: profile?.username || "",
     full_name: profile?.full_name || "",
-    email: profile?.email || "",
     bio: profile?.bio || "",
-    phone: profile?.phone || "",
-    secondary_email: profile?.secondary_email || "",
   });
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,7 +80,18 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await updateProfile(formData);
+      const { error } = await updateProfile({
+        username: formData.username || profile?.email?.split("@")[0],
+        full_name: formData.full_name,
+        bio: formData.bio,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      });
       setIsEditing(false);
     } catch (error) {
       toast({
@@ -152,6 +160,7 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                         }))
                       }
                       className="bg-[#13111C] border-purple-300/20 text-white"
+                      placeholder={profile?.email?.split("@")[0]}
                     />
                   </div>
                   <div className="space-y-2">
@@ -168,41 +177,7 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                         }))
                       }
                       className="bg-[#13111C] border-purple-300/20 text-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-white">
-                      Primary Email
-                    </Label>
-                    <Input
-                      id="email"
-                      value={formData.email}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          email: e.target.value,
-                        }))
-                      }
-                      className="bg-[#13111C] border-purple-300/20 text-white"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="secondary_email" className="text-white">
-                      Secondary Email
-                    </Label>
-                    <Input
-                      id="secondary_email"
-                      value={formData.secondary_email}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          secondary_email: e.target.value,
-                        }))
-                      }
-                      className="bg-[#13111C] border-purple-300/20 text-white"
+                      placeholder="Your full name"
                     />
                   </div>
                 </div>
@@ -219,6 +194,7 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                     }
                     className="bg-[#13111C] border-purple-300/20 text-white"
                     rows={3}
+                    placeholder="Tell us about yourself"
                   />
                 </div>
 
@@ -239,7 +215,14 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={() => setIsEditing(false)}
+                    onClick={() => {
+                      setIsEditing(false);
+                      setFormData({
+                        username: profile?.username || "",
+                        full_name: profile?.full_name || "",
+                        bio: profile?.bio || "",
+                      });
+                    }}
                     className="bg-[#13111C] border-purple-300/20 text-white hover:bg-purple-500/10"
                   >
                     <X className="w-4 h-4 mr-2" />
@@ -253,7 +236,7 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                   <h2 className="text-2xl font-bold text-white truncate">
                     {profile?.full_name ||
                       profile?.username ||
-                      "Anonymous User"}
+                      profile?.email?.split("@")[0]}
                   </h2>
                   <div className="flex items-center gap-2 text-purple-200/60">
                     <Mail className="w-4 h-4" />
