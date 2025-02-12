@@ -12,8 +12,14 @@ export default function Navbar() {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
+    setIsMobileMenuOpen(false);
+    navigate("/", { replace: true });
+    toast({
+      title: "Logged out",
+      description: "Successfully logged out of your account",
+    });
   };
 
   const scrollToSection = (id: string) => {
@@ -75,11 +81,14 @@ export default function Navbar() {
           <div className="hidden md:flex items-center space-x-4">
             {user ? (
               <div className="flex items-center gap-4">
-                <div className="px-3 py-1.5 bg-purple-500/10 rounded-full">
+                <Link
+                  to="/credits"
+                  className="px-3 py-1.5 bg-purple-500/10 rounded-full hover:bg-purple-500/20 transition-colors"
+                >
                   <span className="text-purple-400 text-sm font-medium">
                     {profile?.credits || 0} Credits
                   </span>
-                </div>
+                </Link>
                 <Link
                   to="/profile"
                   className="flex items-center gap-2 text-white/80 hover:text-white transition-colors text-sm font-medium"

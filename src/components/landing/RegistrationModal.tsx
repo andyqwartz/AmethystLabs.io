@@ -8,6 +8,7 @@ import { LoginForm } from "./RegistrationModal/LoginForm";
 import { RegistrationForm } from "./RegistrationModal/RegistrationForm";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface RegistrationModalProps {
   isOpen?: boolean;
@@ -22,6 +23,7 @@ const RegistrationModal = ({
 }: RegistrationModalProps) => {
   const { register, login, loginWithSocial } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [isVerificationSent, setIsVerificationSent] = useState(false);
   const [mode, setMode] = useState<"login" | "register">(defaultMode);
@@ -40,7 +42,10 @@ const RegistrationModal = ({
 
   const handleLogin = async (data: { email: string; password: string }) => {
     try {
-      const { error } = await login(data.email, data.password);
+      const { error, success, redirectPath, profile } = await login(
+        data.email,
+        data.password,
+      );
       if (error) {
         setError(error.message);
         toast({
@@ -48,8 +53,12 @@ const RegistrationModal = ({
           description: error.message,
           variant: "destructive",
         });
-      } else {
+      } else if (success && profile) {
         onOpenChange?.(false);
+        // Check if there was a previous attempted location
+        const from =
+          location.state?.from?.pathname || redirectPath || "/dashboard";
+        navigate(from, { replace: true });
       }
     } catch (error) {
       setError("An unexpected error occurred");
@@ -75,6 +84,9 @@ const RegistrationModal = ({
       } else if (needsVerification) {
         setVerificationEmail(data.email);
         setIsVerificationSent(true);
+      } else {
+        onOpenChange?.(false);
+        navigate("/dashboard", { replace: true });
       }
     } catch (error) {
       setError("An unexpected error occurred");
@@ -86,6 +98,12 @@ const RegistrationModal = ({
       const { error } = await loginWithSocial(provider);
       if (!error) {
         onOpenChange?.(false);
+      } else {
+        toast({
+          title: "Login failed",
+          description: error.message,
+          variant: "destructive",
+        });
       }
     } catch (error) {
       setError("An unexpected error occurred during social login");
@@ -135,8 +153,8 @@ const RegistrationModal = ({
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-[480px] bg-gray-900/95 backdrop-blur-lg border-purple-300/20 rounded-xl overflow-hidden"
-        onInteractOutside={(e) => e.preventDefault()}
+        className="sm:max-w-[480px] bg-gray-900/95 backdrop-blur-lg border-purple-300/20 rounded-xl overflow-hidden max-h-[90vh] overflow-y-auto"
+        onPointerDownOutside={(e) => e.preventDefault()}
       >
         <AnimatePresence mode="wait">
           <motion.div

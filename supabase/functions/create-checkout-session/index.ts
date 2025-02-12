@@ -2,17 +2,32 @@ import { serve } from "https://deno.fresh.dev/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import Stripe from "https://esm.sh/stripe@14.14.0";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
+// Get stripe secret key from vault
+const { data: stripeKey } = await supabaseClient.rpc("get_secret", {
+  name: "stripe_secret_key",
+});
+
+if (!stripeKey) {
+  throw new Error("Failed to get Stripe secret key from vault");
+}
+
+const stripe = new Stripe(stripeKey, {
   apiVersion: "2023-10-16",
   httpClient: Stripe.createFetchHttpClient(),
 });
 
 serve(async (req) => {
   try {
+    // Initialize Supabase client first to access vault
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") || "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+    );
+
     const { amount, credits } = await req.json();
 
     // Get the user from the auth header
-    const supabaseClient = createClient(
+    const supabaseAuthClient = createClient(
       Deno.env.get("SUPABASE_URL") || "",
       Deno.env.get("SUPABASE_ANON_KEY") || "",
       {
@@ -25,7 +40,7 @@ serve(async (req) => {
     const {
       data: { user },
       error: userError,
-    } = await supabaseClient.auth.getUser();
+    } = await supabaseAuthClient.auth.getUser();
 
     if (userError || !user) {
       throw new Error("Unauthorized");
@@ -54,16 +69,35 @@ serve(async (req) => {
         userId: user.id,
         credits: credits.toString(),
       },
+      customer_email: user.email,
     });
 
-    return new Response(JSON.stringify({ id: session.id }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        id: session.id,
+        url: session.url,
+      }),
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST",
+          "Access-Control-Allow-Headers":
+            "authorization, x-client-info, apikey, content-type",
+        },
+      },
+    );
   } catch (err) {
     console.error("Error creating checkout session:", err);
     return new Response(JSON.stringify({ error: { message: err.message } }), {
       status: 400,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST",
+        "Access-Control-Allow-Headers":
+          "authorization, x-client-info, apikey, content-type",
+      },
     });
   }
 });

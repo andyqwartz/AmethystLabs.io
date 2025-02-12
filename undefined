@@ -1,0 +1,5 @@
+import ModeratorDashboard from "@/components/moderator/ModeratorDashboard";
+
+export default function ModeratorDashboardStory() {
+  return <ModeratorDashboard />;
+}

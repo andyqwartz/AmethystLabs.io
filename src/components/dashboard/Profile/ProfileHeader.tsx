@@ -47,6 +47,13 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
         const fileExt = file.name.split(".").pop();
         const filePath = `${profile?.id}/avatar.${fileExt}`;
 
+        // Create bucket if it doesn't exist
+        const { data: bucketData, error: bucketError } =
+          await supabase.storage.getBucket("avatars");
+        if (!bucketData && !bucketError) {
+          await supabase.storage.createBucket("avatars", { public: true });
+        }
+
         const { error: uploadError } = await supabase.storage
           .from("avatars")
           .upload(filePath, file, { upsert: true });
@@ -63,6 +70,7 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
           description: "Profile picture updated successfully",
         });
       } catch (error) {
+        console.error("Avatar upload error:", error);
         toast({
           title: "Error",
           description: "Failed to update profile picture",
@@ -273,7 +281,9 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                   >
                     <Calendar className="w-4 h-4 mr-1" />
                     Joined{" "}
-                    {format(new Date(profile?.created_at || ""), "MMM yyyy")}
+                    {profile?.created_at
+                      ? format(new Date(profile.created_at), "MMM yyyy")
+                      : "Unknown"}
                   </Badge>
                   {profile?.last_login && (
                     <Badge
@@ -282,9 +292,11 @@ const ProfileHeader = ({ className }: ProfileHeaderProps) => {
                     >
                       <Clock className="w-4 h-4 mr-1" />
                       Last seen{" "}
-                      {formatDistanceToNow(new Date(profile.last_login), {
-                        addSuffix: true,
-                      })}
+                      {profile?.last_login && profile.last_login !== "null"
+                        ? formatDistanceToNow(new Date(profile.last_login), {
+                            addSuffix: true,
+                          })
+                        : "Never"}
                     </Badge>
                   )}
                 </div>

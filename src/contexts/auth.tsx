@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { User } from "@supabase/supabase-js";
 import { useToast } from "@/components/ui/use-toast";
-import { useNavigate } from "react-router-dom";
 
 type UserRole = "user" | "moderator" | "admin";
 
@@ -21,6 +20,8 @@ interface Profile {
   preferences: {
     theme?: "light" | "dark";
     emailNotifications?: boolean;
+    autoSave?: boolean;
+    showParameters?: boolean;
     [key: string]: any;
   };
 }
@@ -57,73 +58,117 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const navigate = useNavigate();
+
   const { toast } = useToast();
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+    console.log("Fetching profile for user:", userId);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
 
-    if (!error && data) {
-      setProfile(data as Profile);
-    } else if (error) {
-      console.error("Error fetching profile:", error);
-      // If profile doesn't exist, create it
-      if (error.code === "PGRST116") {
-        const { error: createError } = await supabase.from("profiles").insert({
-          id: userId,
-          email: user?.email,
-          role: "user",
-          credits: 100,
-          preferences: {},
-        });
-        if (!createError) {
-          return fetchProfile(userId);
-        }
+      if (error) {
+        console.error("Error fetching profile:", error);
+        return { error };
       }
+
+      if (data) {
+        setProfile(data as Profile);
+        return { data };
+      }
+
+      return { error: new Error("Profile not found") };
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      return { error };
     }
-    return { data, error };
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setIsEmailVerified(session?.user?.email_confirmed_at != null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+    console.log("Initializing auth...");
+    const initAuth = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (session?.user) {
+          setUser(session.user);
+          setIsEmailVerified(session.user.email_confirmed_at != null);
+          const { data: profileData } = await fetchProfile(session.user.id);
+          if (!profileData) {
+            // If no profile exists, create one
+            const { error: createError } = await supabase
+              .from("profiles")
+              .insert({
+                id: session.user.id,
+                email: session.user.email,
+                role: "user",
+                credits: 10,
+                preferences: {},
+              });
+            if (!createError) {
+              await fetchProfile(session.user.id);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
+
+    initAuth();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null);
-      setIsEmailVerified(session?.user?.email_confirmed_at != null);
+      console.log("Auth state change:", event, session?.user?.id);
 
       if (session?.user) {
-        const { error } = await fetchProfile(session.user.id);
-        if (error && event === "SIGNED_IN") {
-          console.error("Error fetching profile:", error);
+        setUser(session.user);
+        setIsEmailVerified(session.user.email_confirmed_at != null);
+        const { data: profileData } = await fetchProfile(session.user.id);
+        if (!profileData) {
+          // If no profile exists, create one
+          const { error: createError } = await supabase
+            .from("profiles")
+            .insert({
+              id: session.user.id,
+              email: session.user.email,
+              role: "user",
+              credits: 10,
+              preferences: {},
+            });
+          if (!createError) {
+            await fetchProfile(session.user.id);
+          }
         }
       } else {
+        setUser(null);
         setProfile(null);
+        setIsEmailVerified(false);
       }
 
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -132,51 +177,72 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         email,
         password,
       });
+      if (error) throw error;
 
-      if (!error && data.session) {
+      if (data.session) {
         setUser(data.session.user);
-        await fetchProfile(data.session.user.id);
-        toast({
-          title: "Welcome back!",
-          description: "Successfully logged in",
-        });
-        navigate("/dashboard");
+        const { data: profileData } = await fetchProfile(data.session.user.id);
+
+        // Check if this is the first login
+        if (profileData && profileData.last_login === null) {
+          // Update last_login first
+          await supabase
+            .from("profiles")
+            .update({ last_login: new Date().toISOString() })
+            .eq("id", data.session.user.id);
+
+          toast({
+            title: "Welcome to AmethystLabs!",
+            description:
+              "Thank you for joining us. You've received 10 free credits to get started!",
+          });
+        } else {
+          toast({
+            title: "Welcome back!",
+            description: "Successfully logged in",
+          });
+        }
+
+        // Return success and redirect path
+        let redirectPath = "/dashboard";
+        if (profileData?.role === "admin") {
+          redirectPath = "/admin";
+        } else if (profileData?.role === "moderator") {
+          redirectPath = "/mod";
+        }
+
+        return {
+          error: null,
+          success: true,
+          redirectPath,
+          profile: profileData,
+        };
       }
 
-      return { error };
+      return { error: new Error("No session created"), success: false };
     } catch (error) {
-      return { error };
+      return { error, success: false };
     }
   };
 
   const loginWithSocial = async (provider: "github" | "google") => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams:
-          provider === "google"
-            ? {
-                access_type: "offline",
-                prompt: "consent",
-              }
-            : undefined,
-      },
-    });
-
-    if (!error && data.url) {
-      window.location.href = data.url;
-    }
-
-    if (error) {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
       });
-    }
 
-    return { error };
+      if (error) throw error;
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
   };
 
   const register = async (email: string, password: string) => {
@@ -188,17 +254,10 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             email,
+            initial_credits: 10,
           },
         },
       });
-
-      if (!error && data.user) {
-        toast({
-          title: "Welcome to AmethystLabs!",
-          description:
-            "Please check your email to verify your account. You'll receive 10 free credits to start generating images!",
-        });
-      }
 
       return {
         error,
@@ -214,39 +273,35 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setUser(null);
     setProfile(null);
     setIsEmailVerified(false);
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out.",
-    });
-    navigate("/");
   };
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user?.id) return { error: new Error("No user logged in") };
 
-    const { error } = await supabase
-      .from("profiles")
-      .update(updates)
-      .eq("id", user.id);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", user.id);
 
-    if (!error) {
+      if (error) throw error;
+
       await fetchProfile(user.id);
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully.",
-      });
+      return { error: null };
+    } catch (error) {
+      return { error };
     }
-
-    return { error };
   };
 
   const updatePreferences = async (
     updates: Partial<Profile["preferences"]>,
   ) => {
-    if (!user?.id || !profile) return { error: new Error("No user logged in") };
+    if (!profile?.preferences)
+      return { error: new Error("No preferences found") };
 
-    const newPreferences = { ...profile.preferences, ...updates };
-    return updateProfile({ preferences: newPreferences });
+    return updateProfile({
+      preferences: { ...profile.preferences, ...updates },
+    });
   };
 
   const addCredits = async (
@@ -256,22 +311,21 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     if (!user?.id) return { error: new Error("No user logged in") };
 
-    const { error } = await supabase.rpc("handle_credit_transaction", {
-      p_user_id: user.id,
-      p_amount: amount,
-      p_type: type,
-      p_metadata: metadata,
-    });
-
-    if (!error) {
-      await fetchProfile(user.id);
-      toast({
-        title: "Credits added",
-        description: `${amount} credits have been added to your account.`,
+    try {
+      const { error } = await supabase.rpc("handle_credit_transaction", {
+        p_user_id: user.id,
+        p_amount: amount,
+        p_type: type,
+        p_metadata: metadata,
       });
-    }
 
-    return { error };
+      if (error) throw error;
+
+      await fetchProfile(user.id);
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
   };
 
   const useCredits = async (
@@ -284,18 +338,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return { error: new Error("Insufficient credits") };
     }
 
-    const { error } = await supabase.rpc("handle_credit_transaction", {
-      p_user_id: user.id,
-      p_amount: -amount,
-      p_type: type,
-      p_metadata: metadata,
-    });
-
-    if (!error) {
-      await fetchProfile(user.id);
-    }
-
-    return { error };
+    return addCredits(-amount, type, metadata);
   };
 
   return (
@@ -320,12 +363,10 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-const useAuth = () => {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
-
-export { AuthProvider, useAuth };

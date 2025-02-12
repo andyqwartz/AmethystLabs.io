@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/auth";
 import ProfileHeader from "./Profile/ProfileHeader";
 import CreditManagement from "./Profile/CreditManagement";
 import GenerationHistory, { Generation } from "./Profile/GenerationHistory";
 import CreditHistory, { CreditTransaction } from "./Profile/CreditHistory";
 
 const Profile = () => {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [stats, setStats] = useState({
@@ -16,24 +20,45 @@ const Profile = () => {
     creditsSpent: 0,
   });
 
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    loadGenerations();
-    loadTransactions();
-    loadStats();
-  }, []);
+    const loadData = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await Promise.all([loadGenerations(), loadTransactions(), loadStats()]);
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load profile data",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user]);
 
   const loadStats = async () => {
+    if (!user) return;
+
     const { data: genCount } = await supabase
       .from("generations")
       .select("id", { count: "exact" })
+      .eq("user_id", user.id)
       .is("deleted_at", null);
 
     const { data: txns } = await supabase
       .from("credit_transactions")
-      .select("amount, type");
+      .select("amount, type")
+      .eq("user_id", user.id);
 
     if (txns) {
       const earned = txns
@@ -52,9 +77,12 @@ const Profile = () => {
   };
 
   const loadGenerations = async () => {
+    if (!user) return;
+
     const { data, error } = await supabase
       .from("generations")
       .select("*")
+      .eq("user_id", user.id)
       .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
@@ -64,106 +92,16 @@ const Profile = () => {
   };
 
   const loadTransactions = async () => {
+    if (!user) return;
+
     const { data, error } = await supabase
       .from("credit_transactions")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (!error && data) {
       setTransactions(data);
-    }
-  };
-
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        const fileExt = file.name.split(".").pop();
-        const filePath = `${profile?.id}/avatar.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("avatars")
-          .upload(filePath, file, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("avatars").getPublicUrl(filePath);
-
-        setAvatarUrl(publicUrl);
-        await updateProfile({ avatar_url: publicUrl });
-        toast({
-          title: "Avatar updated",
-          description: "Your profile picture has been updated successfully.",
-        });
-      } catch (error) {
-        toast({
-          title: "Error updating avatar",
-          description:
-            "There was an error updating your profile picture. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    try {
-      await updateProfile({
-        name,
-        email,
-      });
-      setIsEditing(false);
-      toast({
-        title: "Profile updated",
-        description: "Your profile information has been updated successfully.",
-      });
-    } catch (error) {
-      toast({
-        title: "Error updating profile",
-        description:
-          "There was an error updating your profile. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleBuyCredits = async (amount: number, credits: number) => {
-    try {
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error("Stripe not loaded");
-
-      const { data: session } = await supabase.functions.invoke(
-        "create-checkout-session",
-        {
-          body: { amount, credits },
-        },
-      );
-
-      const result = await stripe.redirectToCheckout({
-        sessionId: session.id,
-      });
-
-      if (result.error) {
-        toast({
-          title: "Payment error",
-          description: result.error.message,
-          variant: "destructive",
-        });
-      }
-
-      setShowPaymentDialog(false);
-    } catch (error) {
-      toast({
-        title: "Payment error",
-        description:
-          "There was an error processing your payment. Please try again.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -172,7 +110,8 @@ const Profile = () => {
       const { error } = await supabase
         .from("generations")
         .update({ deleted_at: new Date().toISOString() })
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", user?.id);
 
       if (error) throw error;
 
@@ -189,10 +128,6 @@ const Profile = () => {
         variant: "destructive",
       });
     }
-  };
-
-  const handleTweakGeneration = (generation: Generation) => {
-    navigate(`/dashboard?tweak=${generation.id}`);
   };
 
   const handleExportHistory = () => {
@@ -225,20 +160,36 @@ const Profile = () => {
     }
   };
 
-  const creditPackages = [
-    { credits: 100, price: 5 },
-    { credits: 500, price: 20 },
-    { credits: 1000, price: 35 },
-  ];
+  if (!user || !profile || loading) {
+    return (
+      <div className="min-h-screen bg-[#13111C] pt-20 px-4 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#13111C] pt-20 px-4">
       <div className="container mx-auto max-w-6xl">
         <div className="grid lg:grid-cols-3 gap-8">
-          <ProfileHeader stats={stats} />
+          <div className="lg:col-span-2">
+            <ProfileHeader />
+          </div>
           <div className="space-y-6">
-            <CreditManagement />
-            <CreditHistory transactions={transactions} />
+            <Link
+              to="/credits"
+              className="block w-full p-6 bg-[#1A1625] border border-purple-300/20 rounded-lg hover:bg-[#1F1A29] transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-1">Credits</h3>
+                  <p className="text-purple-200/60">Manage your credits</p>
+                </div>
+                <div className="text-3xl font-bold text-purple-400">
+                  {profile?.credits || 0}
+                </div>
+              </div>
+            </Link>
           </div>
         </div>
 
@@ -246,8 +197,8 @@ const Profile = () => {
           <GenerationHistory
             generations={generations}
             onDelete={handleDeleteGeneration}
-            onTweak={handleTweakGeneration}
             onExport={handleExportHistory}
+            onTweak={() => {}}
           />
         </div>
       </div>

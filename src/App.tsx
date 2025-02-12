@@ -1,91 +1,205 @@
-import { Suspense, useEffect } from "react";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+import { toast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
-import {
-  useRoutes,
-  Routes,
-  Route,
-  Navigate,
-  useLocation,
-} from "react-router-dom";
+import AdminDashboard from "./components/admin/AdminDashboard";
+import ModeratorDashboard from "./components/moderator/ModeratorDashboard";
+import { Routes, Route, Navigate, useLocation, Outlet } from "react-router-dom";
 import Home from "./components/home";
-import routes from "tempo-routes";
 import Navbar from "./components/layout/Navbar";
 import GenerationDashboard from "./components/dashboard/GenerationDashboard";
 import Profile from "./components/dashboard/Profile";
+import Credits from "./components/dashboard/Credits";
 import { useAuth } from "./contexts/auth";
-import { supabase } from "@/lib/supabase";
+
+const ProtectedRoute = ({ allowedRoles }: { allowedRoles?: string[] }) => {
+  const { user, profile } = useAuth();
+  const location = useLocation();
+
+  if (!user) {
+    return <Navigate to="/" state={{ from: location }} replace />;
+  }
+
+  if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+};
 
 function App() {
-  const { user, loading } = useAuth();
+  const { user, profile } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Handle auth callback
   useEffect(() => {
     const handleAuthCallback = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const hash = new URLSearchParams(window.location.hash.slice(1));
+      if (location.pathname.startsWith("/auth/callback")) {
+        const params = new URLSearchParams(window.location.search);
+        const hash = new URLSearchParams(window.location.hash.slice(1));
 
-      const accessToken =
-        hash.get("access_token") || params.get("access_token");
-      const refreshToken =
-        hash.get("refresh_token") || params.get("refresh_token");
+        // Check for email confirmation success
+        const isEmailConfirmation = params.get("type") === "email_confirmation";
 
-      if (accessToken && refreshToken) {
-        await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        });
+        if (isEmailConfirmation) {
+          toast({
+            title: "Email Verified",
+            description: "Your email has been verified. You can now log in.",
+          });
+          navigate("/", { replace: true });
+          return;
+        }
+
+        // Handle OAuth callback
+        const accessToken =
+          hash.get("access_token") || params.get("access_token");
+        const refreshToken =
+          hash.get("refresh_token") || params.get("refresh_token");
+        const provider = params.get("provider");
+
+        if (accessToken && refreshToken) {
+          try {
+            // Set the session manually
+            const {
+              data: { session },
+              error,
+            } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+
+            if (error) throw error;
+            if (!session?.user) throw new Error("No user in session");
+
+            // Get or create user profile
+            const { data: existingProfile } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .single();
+
+            if (!existingProfile) {
+              // Create new profile for social login
+              await supabase.from("profiles").insert({
+                id: session.user.id,
+                email: session.user.email,
+                role: "user",
+                credits: 10,
+                preferences: {},
+              });
+            }
+
+            // Get user role from profile
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("role")
+              .eq("id", session.user.id)
+              .single();
+
+            let redirectPath = "/dashboard";
+            if (profile?.role === "admin") {
+              redirectPath = "/admin";
+            } else if (profile?.role === "moderator") {
+              redirectPath = "/mod";
+            }
+
+            toast({
+              title: "Success",
+              description: existingProfile
+                ? `Welcome back! Successfully logged in with ${provider || "social provider"}`
+                : `Welcome to AmethystLabs! You've received 10 free credits to get started.`,
+            });
+
+            navigate(redirectPath, { replace: true });
+            return;
+          } catch (error) {
+            console.error("Auth callback error:", error);
+            toast({
+              title: "Error",
+              description: "Failed to complete authentication",
+              variant: "destructive",
+            });
+            navigate("/", { replace: true });
+          }
+        } else {
+          navigate("/", { replace: true });
+        }
       }
     };
 
-    if (location.pathname === "/auth/callback") {
-      handleAuthCallback();
+    handleAuthCallback();
+  }, [location, navigate]);
+
+  // Handle auth redirects
+  useEffect(() => {
+    if (user && profile) {
+      // If user is logged in and trying to access home or auth routes, redirect based on role
+      if (location.pathname === "/" || location.pathname.startsWith("/auth/")) {
+        let redirectPath = "/dashboard";
+        if (profile.role === "admin") {
+          redirectPath = "/admin";
+        } else if (profile.role === "moderator") {
+          redirectPath = "/mod";
+        }
+        navigate(redirectPath, { replace: true });
+      }
+    } else if (!user && !location.pathname.startsWith("/auth/")) {
+      // If user is not logged in and trying to access any route except auth routes, redirect to home
+      if (location.pathname !== "/") {
+        navigate("/", {
+          replace: true,
+          state: { from: location }, // Save attempted location
+        });
+      }
     }
-  }, [location]);
+  }, [user, profile, location.pathname]);
 
-  // Move useRoutes after location hook
-  const tempoRoutes =
-    import.meta.env.VITE_TEMPO === "true" ? useRoutes(routes) : null;
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#13111C] flex items-center justify-center">
-        <p className="text-white">Loading...</p>
-      </div>
-    );
-  }
+  // Handle initial auth state
+  useEffect(() => {
+    if (user && profile && location.pathname === "/") {
+      let redirectPath = "/dashboard";
+      if (profile.role === "admin") {
+        redirectPath = "/admin";
+      } else if (profile.role === "moderator") {
+        redirectPath = "/mod";
+      }
+      navigate(redirectPath, { replace: true });
+    }
+  }, [user, profile]);
 
   return (
-    <Suspense fallback={<p>Loading...</p>}>
-      <div className="min-h-screen bg-gradient-to-b from-[#2D2438] via-[#1F1A29] to-[#13111C]">
-        <Navbar />
-        <Routes>
-          <Route
-            path="/"
-            element={!user ? <Home /> : <Navigate to="/dashboard" />}
-          />
-          <Route
-            path="/dashboard"
-            element={user ? <GenerationDashboard /> : <Navigate to="/" />}
-          />
-          <Route
-            path="/profile"
-            element={user ? <Profile /> : <Navigate to="/" />}
-          />
-          <Route
-            path="/auth/callback"
-            element={<Navigate to="/dashboard" replace />}
-          />
-          {/* Handle error routes */}
-          <Route path="/*" element={<Navigate to="/" />} />
-          {import.meta.env.VITE_TEMPO === "true" && (
-            <Route path="/tempobook/*" element={null} />
-          )}
-        </Routes>
-        {tempoRoutes}
-      </div>
-      <Toaster position="top-center" />
-    </Suspense>
+    <div className="min-h-screen bg-gradient-to-b from-[#2D2438] via-[#1F1A29] to-[#13111C]">
+      <Navbar />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/auth/*" element={<Navigate to="/" replace />} />
+
+        {/* Protected Routes */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<GenerationDashboard />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/credits" element={<Credits />} />
+        </Route>
+
+        {/* Admin Routes */}
+        <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+          <Route path="/admin/*" element={<AdminDashboard />} />
+        </Route>
+
+        {/* Moderator Routes */}
+        <Route
+          element={<ProtectedRoute allowedRoles={["admin", "moderator"]} />}
+        >
+          <Route path="/mod/*" element={<ModeratorDashboard />} />
+        </Route>
+
+        {/* Catch all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <Toaster />
+    </div>
   );
 }
 
